@@ -6,7 +6,7 @@ import sys
 import argparse
 import logging
 from datetime import datetime, timedelta
-from git import Repo
+from git import Repo, InvalidGitRepositoryError
 from openai import OpenAI
 from tqdm import tqdm
 from gitsearch.embeddings import find_relevant_commits
@@ -23,7 +23,7 @@ def find_git_root(path):
     try:
         git_repo = Repo(path, search_parent_directories=True)
         return git_repo.git.rev_parse("--show-toplevel")
-    except git.InvalidGitRepositoryError:
+    except InvalidGitRepositoryError:
         return None
 
 # --- Parse command line arguments ---
