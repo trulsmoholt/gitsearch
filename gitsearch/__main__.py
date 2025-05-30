@@ -7,7 +7,7 @@ import os
 import argparse
 from datetime import datetime, timedelta
 from typing import List, Dict
-from embeddings import find_relevant_commits
+from .embeddings import find_relevant_commits
 EMPTY_TREE_SHA   = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 def find_git_root(path):
