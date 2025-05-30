@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
 # LLM Git Commit Search Prototype
 
-import openai
-import git
 import os
+import sys
 import argparse
+import logging
 from datetime import datetime, timedelta
-from typing import List, Dict
-from .embeddings import find_relevant_commits
+from git import Repo
+from openai import OpenAI
+from tqdm import tqdm
+from gitsearch.embeddings import find_relevant_commits
 EMPTY_TREE_SHA   = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+# Configure logging to not interfere with tqdm
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
+# Disable httpx logging
+logging.getLogger('httpx').setLevel(logging.WARNING)
 
 def find_git_root(path):
     """Find the git repository root directory."""
     try:
-        git_repo = git.Repo(path, search_parent_directories=True)
+        git_repo = Repo(path, search_parent_directories=True)
         return git_repo.git.rev_parse("--show-toplevel")
     except git.InvalidGitRepositoryError:
         return None
@@ -39,8 +47,8 @@ def parse_args():
     return args
 
 # --- Collect recent commits ---
-def collect_commits(repo_path, days_back):
-    repo = git.Repo(repo_path)
+def collect_commits(repo_path, days_back)->list[dict]:
+    repo = Repo(repo_path)
     cutoff_date = datetime.now() - timedelta(days=days_back)
     commits = []
     for commit in repo.iter_commits(since=cutoff_date.isoformat()):
@@ -72,8 +80,7 @@ def build_prompt(commits, user_query):
     return prompt
 
 # --- Send to LLM ---
-def query_llm(prompt, api_key, model):
-    client = openai.OpenAI(api_key=api_key)
+def query_llm(prompt, client, model):
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -88,9 +95,7 @@ def query_llm(prompt, api_key, model):
 # --- Main function ---
 def main():
     args = parse_args()
-    api_key = args.api_key or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OpenAI API key must be provided either via --api-key or OPENAI_API_KEY environment variable")
+    client = OpenAI(api_key=args.api_key or os.getenv("OPENAI_API_KEY"))
     
     # Collect all commits
     all_commits = collect_commits(args.repo, args.days)
@@ -103,13 +108,13 @@ def main():
     
     # Find most relevant commits using embeddings
     print("\nFinding most relevant commits using semantic search...")
-    relevant_commits = find_relevant_commits(all_commits, user_query, api_key, args.top_k)
+    relevant_commits = find_relevant_commits(all_commits, user_query, client, args.top_k)
     print(f"Selected top {len(relevant_commits)} most relevant commits")
     
     # Build prompt with only relevant commits
     prompt = build_prompt(relevant_commits, user_query)
     print("\n--- Querying LLM ---\n")
-    response = query_llm(prompt, api_key, args.model)
+    response = query_llm(prompt, client, args.model)
     print(response)
 
 if __name__ == "__main__":

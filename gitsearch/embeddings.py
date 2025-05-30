@@ -1,33 +1,62 @@
-import openai
+import os
+import logging
 import numpy as np
-from typing import List, Dict
+from openai import OpenAI
+from tqdm import tqdm
 
-def get_embedding(text: str, api_key: str) -> List[float]:
-    """Get embedding for a text using OpenAI's API."""
-    client = openai.OpenAI(api_key=api_key)
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text
-    )
-    return response.data[0].embedding
+# Configure logging to not interfere with tqdm
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
+# Disable httpx logging
+logging.getLogger('httpx').setLevel(logging.WARNING)
 
-def cosine_similarity(a: List[float], b: List[float]) -> float:
+def get_embedding(text: str, client: OpenAI) -> list[float]:
+    """Get embedding for a single text using OpenAI's API."""
+    try:
+        response = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=text,
+            encoding_format="float"
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        logger.error(f"Error getting embedding: {e}")
+        return None
+
+def get_embeddings(texts: list[str], client: OpenAI) -> list[list[float]]:
+    """Get embeddings for multiple texts with progress bar."""
+    embeddings = []
+    for text in tqdm(texts, desc="Generating embeddings", unit="commit"):
+        embedding = get_embedding(text, client)
+        if embedding:
+            embeddings.append(embedding)
+        else:
+            # If embedding fails, add a zero vector of the same dimension
+            embeddings.append([0.0] * 1536)  # text-embedding-3-small dimension
+    return embeddings
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Calculate cosine similarity between two vectors."""
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-def find_relevant_commits(commits: List[Dict], query: str, api_key: str, top_k: int = 5) -> List[Dict]:
-    """Find the most relevant commits using embeddings."""
+def find_relevant_commits(commits: list[dict], query: str, client: OpenAI, top_k: int = 5) -> list[dict]:
+    """Find the most relevant commits for a given query using embeddings."""
     # Get query embedding
-    query_embedding = get_embedding(query, api_key)
-    
-    # Get embeddings for each commit (combining message and diff)
-    commit_scores = []
-    for commit in commits:
-        commit_text = f"{commit['message']} {commit['diff']}"
-        commit_embedding = get_embedding(commit_text, api_key)
+    query_embedding = get_embedding(query, client)
+    if not query_embedding:
+        logger.error("Failed to get query embedding")
+        return []
+
+    # Get commit embeddings with progress bar
+    commit_texts = [f"{commit['message']}\n{commit['diff']}" for commit in commits]
+    commit_embeddings = get_embeddings(commit_texts, client)
+
+    # Calculate similarities
+    similarities = []
+    for i, commit_embedding in enumerate(commit_embeddings):
         similarity = cosine_similarity(query_embedding, commit_embedding)
-        commit_scores.append((commit, similarity))
-    
+        similarities.append((similarity, commits[i]))
+
     # Sort by similarity and return top k
-    commit_scores.sort(key=lambda x: x[1], reverse=True)
-    return [commit for commit, _ in commit_scores[:top_k]] 
+    similarities.sort(reverse=True)
+    return [commit for _, commit in similarities[:top_k]] 
