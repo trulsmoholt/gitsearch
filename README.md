@@ -29,7 +29,7 @@ pip install --user .
 
 ## Configuration
 
-Set your OpenAI API key as an environment variable:
+Set your [OpenAI API key](https://platform.openai.com/docs/overview) as an environment variable:
 ```bash
 export OPENAI_API_KEY="your-api-key-here"
 ```
@@ -90,7 +90,3 @@ python gitsearch.py "your query"
 - openai
 - gitpython
 - numpy
-
-## License
-
-[Your chosen license]
