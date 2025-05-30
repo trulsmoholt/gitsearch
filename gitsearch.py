@@ -8,6 +8,7 @@ import argparse
 from datetime import datetime, timedelta
 from typing import List, Dict
 from embeddings import find_relevant_commits
+EMPTY_TREE_SHA   = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 def find_git_root(path):
     """Find the git repository root directory."""
@@ -43,8 +44,9 @@ def collect_commits(repo_path, days_back):
     cutoff_date = datetime.now() - timedelta(days=days_back)
     commits = []
     for commit in repo.iter_commits(since=cutoff_date.isoformat()):
+        parent = commit.parents[0] if commit.parents else EMPTY_TREE_SHA
         diff_str = ""
-        for diff in commit.diff(None, create_patch=True):
+        for diff in commit.diff(parent, create_patch=True):
             diff_str += diff.diff.decode("utf-8", errors="ignore")
         commits.append({
             "hash": commit.hexsha[:7],
@@ -66,7 +68,7 @@ def build_prompt(commits, user_query):
         prompt += f"Commit {c['hash']} by {c['author']} on {c['date']}\n"
         prompt += f"Message: {c['message']}\n"
         prompt += f"Diff (truncated):\n{c['diff']}\n\n"
-    prompt += "\nRespond with a list of possibly related commits and a brief explanation for each."
+    prompt += "\nRespond with a list of possibly related commits and a brief explanation for each. Please add the commit messges to the list."
     return prompt
 
 # --- Send to LLM ---
