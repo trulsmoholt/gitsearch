@@ -3,6 +3,7 @@ import logging
 import numpy as np
 from openai import OpenAI
 from tqdm import tqdm
+from .cache import EmbeddingCache
 
 # Configure logging to not interfere with tqdm
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -10,15 +11,26 @@ logger = logging.getLogger(__name__)
 # Disable httpx logging
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
+# Initialize cache
+cache = EmbeddingCache()
+
 def get_embedding(text: str, client: OpenAI) -> list[float]:
     """Get embedding for a single text using OpenAI's API."""
+    # Try to get from cache first
+    cached = cache.get(text)
+    if cached is not None:
+        return cached
+
     try:
         response = client.embeddings.create(
             model="text-embedding-3-small",
             input=text,
             encoding_format="float"
         )
-        return response.data[0].embedding
+        embedding = response.data[0].embedding
+        # Store in cache
+        cache.set(text, embedding)
+        return embedding
     except Exception as e:
         logger.error(f"Error getting embedding: {e}")
         return None
