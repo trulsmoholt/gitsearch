@@ -69,6 +69,6 @@ def find_relevant_commits(commits: list[dict], query: str, client: OpenAI, top_k
         similarity = cosine_similarity(query_embedding, commit_embedding)
         similarities.append((similarity, commits[i]))
 
-    # Sort by similarity and return top k
-    similarities.sort(reverse=True)
+    # Sort by similarity score (first element of tuple) and return top k
+    similarities.sort(key=lambda x: x[0], reverse=True)
     return [commit for _, commit in similarities[:top_k]] 
