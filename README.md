@@ -13,7 +13,7 @@ A command-line tool that uses OpenAI's embeddings and GPT models to help you fin
 
 1. Clone the repository:
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/trulsmoholt/gitsearch.git
 cd gitsearch
 ```
 
